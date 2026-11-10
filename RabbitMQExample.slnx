@@ -1,4 +1,32 @@
 <Solution>
-  <Project Path="Consumer/Consumer.csproj" />
-  <Project Path="Producer/Producer.csproj" />
+  <Folder Name="/01-HelloWorld/">
+    <Project Path="01-HelloWorld/Producer/HelloWorld.Producer.csproj" />
+    <Project Path="01-HelloWorld/Consumer/HelloWorld.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/02-WorkQueues/">
+    <Project Path="02-WorkQueues/Producer/WorkQueues.Producer.csproj" />
+    <Project Path="02-WorkQueues/Consumer/WorkQueues.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/03-PublishSubscribe/">
+    <Project Path="03-PublishSubscribe/Producer/PublishSubscribe.Producer.csproj" />
+    <Project Path="03-PublishSubscribe/Consumer/PublishSubscribe.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/04-Topics/">
+    <Project Path="04-Topics/Producer/Topics.Producer.csproj" />
+    <Project Path="04-Topics/Consumer/Topics.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/05-Rpc/">
+    <Project Path="05-Rpc/Producer/Rpc.Producer.csproj" />
+    <Project Path="05-Rpc/Consumer/Rpc.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/06-ReliableMessaging/">
+    <Project Path="06-ReliableMessaging/Producer/ReliableMessaging.Producer.csproj" />
+    <Project Path="06-ReliableMessaging/Consumer/ReliableMessaging.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="docker-compose.yml" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
 </Solution>

@@ -1,5 +1,6 @@
 using System.Text;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 
 const string QueueName = "hello";
 
@@ -8,7 +9,9 @@ var factory = new ConnectionFactory
     HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
     Port = int.TryParse(Environment.GetEnvironmentVariable("RABBITMQ_PORT"), out var port) ? port : 5672,
     UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
-    Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? "guest"
+    Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? "guest",
+    // Nombre con el que aparece la conexión en la pestaña "Connections" de la interfaz web.
+    ClientProvidedName = "01-hello-world-producer"
 };
 
 Console.WriteLine($"[Producer] Conectando a RabbitMQ en {factory.HostName}:{factory.Port} ...");
@@ -18,7 +21,7 @@ await using var channel = await connection.CreateChannelAsync();
 
 // Declarar la cola es idempotente: la crea si no existe, no hace nada si ya existe.
 // Producer y Consumer la declaran para que no importe cuál arranca primero.
-// durable: true es obligatorio en RabbitMQ 4.2+ (las colas transitorias no exclusivas están deprecadas).
+// durable: true porque RabbitMQ 4.x ya no permite por defecto colas transitorias no exclusivas.
 await channel.QueueDeclareAsync(
     queue: QueueName,
     durable: true,
@@ -39,7 +42,16 @@ else
     Console.WriteLine("[Producer] Escribe un mensaje y presiona Enter para enviarlo.");
     Console.WriteLine("[Producer] Línea vacía o Ctrl+C para salir.");
 
-    while (Console.ReadLine() is { Length: > 0 } line)
+    // Ctrl+C cancela la espera de la siguiente línea en lugar de matar el proceso,
+    // así los "await using" de arriba cierran la conexión limpiamente.
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cts.Cancel();
+    };
+
+    while (await ReadLineAsync(cts.Token) is { Length: > 0 } line)
     {
         await SendAsync(line);
     }
@@ -54,9 +66,23 @@ async Task SendAsync(string message)
     Console.WriteLine($"[Producer] Enviado: \"{message}\"");
 }
 
+// Console.ReadLine no acepta un CancellationToken; WaitAsync deja de esperarla al cancelar.
+static async Task<string?> ReadLineAsync(CancellationToken cancellationToken)
+{
+    try
+    {
+        return await Task.Run(Console.ReadLine, CancellationToken.None).WaitAsync(cancellationToken);
+    }
+    catch (OperationCanceledException)
+    {
+        return null;
+    }
+}
+
 // RabbitMQ puede tardar unos segundos en estar listo tras "docker compose up",
-// así que reintentamos la conexión unas cuantas veces antes de rendirnos.
-static async Task<IConnection> ConnectWithRetryAsync(ConnectionFactory factory, int attempts = 5)
+// así que reintentamos con espera exponencial (1, 2, 4, 8 y 16 s) antes de rendirnos.
+// Un usuario o contraseña incorrectos no se arreglan esperando, así que ese error no se reintenta.
+static async Task<IConnection> ConnectWithRetryAsync(ConnectionFactory factory, int attempts = 6)
 {
     for (var i = 1; ; i++)
     {
@@ -64,10 +90,11 @@ static async Task<IConnection> ConnectWithRetryAsync(ConnectionFactory factory, 
         {
             return await factory.CreateConnectionAsync();
         }
-        catch (Exception ex) when (i < attempts)
+        catch (BrokerUnreachableException ex) when (i < attempts && ex.InnerException is not AuthenticationFailureException)
         {
-            Console.WriteLine($"[Producer] Intento {i}/{attempts} falló ({ex.Message}). Reintentando en 3 s...");
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            var delay = TimeSpan.FromSeconds(Math.Pow(2, i - 1));
+            Console.WriteLine($"[Producer] Intento {i}/{attempts} falló ({ex.Message}). Reintentando en {delay.TotalSeconds} s...");
+            await Task.Delay(delay);
         }
     }
 }

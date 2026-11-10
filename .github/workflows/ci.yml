@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Se usa el mismo docker-compose.yml que en local, así la versión de RabbitMQ se fija en un solo lugar.
+      - name: Levantar RabbitMQ
+        run: docker compose up -d --wait
+
+      - name: Formato
+        run: dotnet format RabbitMQExample.slnx --verify-no-changes
+
+      - name: Compilar
+        run: dotnet build RabbitMQExample.slnx -c Release -warnaserror
+
+      - name: Buscar dependencias con vulnerabilidades conocidas
+        run: |
+          dotnet list RabbitMQExample.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then exit 1; fi
+
+      - name: Prueba de humo de los 6 ejemplos
+        run: bash scripts/smoke-test.sh
+
+      - name: Logs de RabbitMQ
+        if: failure()
+        run: docker compose logs rabbitmq

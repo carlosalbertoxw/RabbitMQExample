@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Paquetes NuGet de los 12 proyectos, agrupados en un solo PR por semana.
+  - package-ecosystem: nuget
+    directories:
+      - "/*/Producer"
+      - "/*/Consumer"
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  # Imagen de RabbitMQ en docker-compose.yml (la usan tanto el entorno local como el CI).
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

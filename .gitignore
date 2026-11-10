@@ -1,4 +1,13 @@
-bin/
-obj/
-*.user
+# Compilación
+[Bb]in/
+[Oo]bj/
+
+# Editores e IDEs
 .vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Credenciales locales para docker compose
+.env

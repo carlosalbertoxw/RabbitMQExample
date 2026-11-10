@@ -1,43 +1,40 @@
 # RabbitMQExample
 
-Ejemplo básico de mensajería con RabbitMQ en C# / .NET 10: un proyecto de consola **Producer** publica mensajes en una cola llamada `hello` y otro proyecto de consola **Consumer** los recibe y los imprime. RabbitMQ corre en Docker mediante `docker compose`.
+[![CI](https://github.com/carlosalbertoxw/RabbitMQExample/actions/workflows/ci.yml/badge.svg)](https://github.com/carlosalbertoxw/RabbitMQExample/actions/workflows/ci.yml)
 
-## Estructura del proyecto
+Seis ejemplos de mensajería con RabbitMQ en C# / .NET 10, ordenados de menor a mayor complejidad. Cada ejemplo tiene un proyecto de consola **Producer**, que envía mensajes, y otro **Consumer**, que los recibe. RabbitMQ corre en Docker con `docker compose`.
 
-```
-RabbitMQExample/
-├── docker-compose.yml        # Levanta RabbitMQ (imagen rabbitmq:latest)
-├── rabbitmq/
-│   └── enabled_plugins       # Habilita la interfaz web de administración
-├── Producer/                 # Consola que ENVÍA mensajes a la cola "hello"
-│   └── Program.cs
-├── Consumer/                 # Consola que RECIBE mensajes de la cola "hello"
-│   └── Program.cs
-└── RabbitMQExample.slnx      # Solución (los proyectos son independientes)
-```
+| # | Ejemplo | Qué aprendes |
+|---|---------|--------------|
+| 01 | [HelloWorld](01-HelloWorld/README.md) | Conectarse, declarar una cola, publicar y consumir. Lo mínimo indispensable. |
+| 02 | [WorkQueues](02-WorkQueues/README.md) | Repartir tareas entre varios workers con confirmación manual (ack), `prefetch` y mensajes persistentes. |
+| 03 | [PublishSubscribe](03-PublishSubscribe/README.md) | Enviar una copia de cada mensaje a todos los suscriptores con un exchange `fanout` y colas temporales. |
+| 04 | [Topics](04-Topics/README.md) | Enrutar mensajes por patrones (`*.error`, `pagos.#`) con un exchange `topic`. |
+| 05 | [Rpc](05-Rpc/README.md) | Petición y respuesta sobre RabbitMQ: `ReplyTo`, `CorrelationId`, timeouts y detección de "no hay servidor". |
+| 06 | [ReliableMessaging](06-ReliableMessaging/README.md) | Un flujo pensado para no perder mensajes: confirmaciones del publicador, colas quorum, consumidor idempotente, reintentos con espera, cola de mensajes muertos, recuperación de la conexión y apagado ordenado con Generic Host. |
 
-Los dos proyectos son totalmente independientes: cada uno tiene su propio `.csproj`, no se referencian entre sí y se pueden ejecutar por separado y en cualquier orden (ambos declaran la cola, que es una operación idempotente).
+Cada carpeta tiene su propio README con el detalle, los comandos y experimentos para ver cada concepto en acción.
 
 ## Requisitos
 
-- [.NET SDK 10](https://dotnet.microsoft.com/download) (probado con 10.0.301)
-- Docker con Docker Compose (usa la imagen `rabbitmq:latest` ya descargada; no descarga nada nuevo si ya la tienes)
+- [.NET SDK 10](https://dotnet.microsoft.com/download). La versión mínima está fijada en [`global.json`](global.json).
+- Docker con Docker Compose.
 
 ## 1. Levantar RabbitMQ
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
 
-Esto arranca un contenedor llamado `rabbitmq-example` con:
+Arranca un contenedor `rabbitmq-example` con RabbitMQ 4.4 y espera a que esté listo (`--wait` usa el *healthcheck* del compose).
 
 | Puerto | Uso |
 |--------|-----|
-| `5672` | AMQP — aquí se conectan Producer y Consumer |
-| `15672` | Interfaz web de administración |
+| `5672` | AMQP: aquí se conectan los Producer y Consumer |
+| `15672` | Interfaz web de administración: http://localhost:15672 (usuario `guest`, contraseña `guest`) |
 
-- **Interfaz web:** http://localhost:15672 — usuario `guest`, contraseña `guest`. Ahí puedes ver la cola `hello`, cuántos mensajes tiene encolados y los consumidores conectados.
-- El compose incluye un *healthcheck*; puedes comprobar el estado con `docker compose ps` (espera a ver `healthy`).
+- Los puertos solo se publican en `127.0.0.1`, así que nadie más en tu red puede conectarse con las credenciales por defecto.
+- Los datos se guardan en el volumen `rabbitmq-data`, así que colas y mensajes persistentes sobreviven a `docker compose down` / `up`.
 
 Para detenerlo:
 
@@ -45,40 +42,29 @@ Para detenerlo:
 docker compose down
 ```
 
-## 2. Ejecutar el Consumer (recibe mensajes)
-
-En una terminal:
+Para detenerlo y borrar también colas y mensajes (útil para empezar de cero):
 
 ```bash
-dotnet run --project Consumer
+docker compose down -v
 ```
 
-Queda a la escucha de la cola `hello` e imprime cada mensaje que llega. Se cierra con `Ctrl+C`.
+## 2. Ejecutar un ejemplo
 
-## 3. Ejecutar el Producer (envía mensajes)
-
-En **otra** terminal. Tiene dos modos:
+Cada ejemplo se ejecuta con dos terminales: una para el Consumer y otra para el Producer. Por ejemplo, el primero:
 
 ```bash
-# Modo un solo mensaje: envía el texto pasado como argumento y termina
-dotnet run --project Producer -- "Hola desde el Producer"
-
-# Modo interactivo: cada línea que escribas se envía como un mensaje
-# (línea vacía o Ctrl+C para salir)
-dotnet run --project Producer
+dotnet run --project 01-HelloWorld/Consumer
 ```
 
-Salida esperada en el Consumer:
-
-```
-[Consumer] Recibido: "Hola desde el Producer"
+```bash
+dotnet run --project 01-HelloWorld/Producer -- "Hola desde el Producer"
 ```
 
-El orden no importa: si el Producer envía mensajes sin que haya ningún Consumer conectado, los mensajes quedan encolados en RabbitMQ y se entregan cuando el Consumer arranque.
+Los argumentos de cada ejemplo están en su README.
 
 ## Configuración
 
-Por defecto ambos proyectos se conectan a `localhost:5672` con `guest`/`guest`. Se puede cambiar con variables de entorno (útil si RabbitMQ corre en otra máquina o con otras credenciales):
+Todos los ejemplos se conectan a `localhost:5672` con `guest`/`guest`. Se puede cambiar con variables de entorno:
 
 | Variable | Valor por defecto |
 |----------|-------------------|
@@ -90,17 +76,48 @@ Por defecto ambos proyectos se conectan a `localhost:5672` con `guest`/`guest`. 
 Ejemplo en PowerShell:
 
 ```powershell
-$env:RABBITMQ_HOST = "otro-servidor"; dotnet run --project Consumer
+$env:RABBITMQ_HOST = "otro-servidor"; dotnet run --project 01-HelloWorld/Consumer
 ```
 
-## Cómo funciona
+`docker-compose.yml` lee `RABBITMQ_USER` y `RABBITMQ_PASS` para crear el usuario del broker, desde el entorno o desde un archivo `.env` junto al compose (está en `.gitignore`). Esos valores solo se aplican la primera vez que el broker arranca con el volumen vacío; para cambiarlos después, usa `docker compose down -v`.
 
-1. Ambos programas crean una conexión AMQP con `ConnectionFactory` (paquete NuGet [`RabbitMQ.Client`](https://www.nuget.org/packages/RabbitMQ.Client) 7.x, API asíncrona) y reintentan hasta 5 veces por si RabbitMQ todavía está arrancando.
-2. Ambos declaran la cola `hello` con `QueueDeclareAsync` (`durable: true`, obligatorio en RabbitMQ 4.2+, donde las colas transitorias no exclusivas están deprecadas).
-3. El **Producer** publica con `BasicPublishAsync` en el *exchange* por defecto (`""`), usando el nombre de la cola como *routing key*.
-4. El **Consumer** registra un `AsyncEventingBasicConsumer` con `BasicConsumeAsync` y `autoAck: true`: RabbitMQ da por procesado cada mensaje en cuanto lo entrega (suficiente para un ejemplo; en producción se suele confirmar manualmente con `BasicAckAsync`).
+> `guest`/`guest` son las credenciales públicas por defecto de RabbitMQ y solo sirven para desarrollo local. Si reutilizas este código fuera de tu máquina, configura siempre las variables de entorno.
 
-## Notas
+## Estructura del proyecto
 
-- La imagen `rabbitmq:latest` no trae la interfaz web activada; el archivo `rabbitmq/enabled_plugins` (montado como volumen en el compose) habilita el plugin `rabbitmq_management` al arrancar.
-- La cola es durable pero los mensajes no se publican como persistentes: si el contenedor se reinicia, los mensajes encolados se pierden. Para un ejemplo básico es suficiente.
+```
+RabbitMQExample/
+├── docker-compose.yml          # RabbitMQ 4.4 con la interfaz de administración
+├── RabbitMQExample.slnx        # Solución con los 12 proyectos, agrupados por ejemplo
+├── global.json                 # Versión mínima del SDK de .NET
+├── 01-HelloWorld/
+│   ├── Producer/
+│   └── Consumer/
+├── 02-WorkQueues/              # misma estructura en cada ejemplo
+├── 03-PublishSubscribe/
+├── 04-Topics/
+├── 05-Rpc/
+├── 06-ReliableMessaging/
+├── scripts/smoke-test.sh       # Prueba de humo de los 6 ejemplos
+└── .github/                    # CI (GitHub Actions) y Dependabot
+```
+
+Los 12 proyectos son totalmente independientes: cada uno tiene su propio `.csproj` y no hay código compartido. Por eso partes como la conexión con reintentos se repiten en cada `Program.cs`: así cada archivo se puede leer y copiar por separado, sin saltar entre proyectos.
+
+## Prueba de humo y CI
+
+`scripts/smoke-test.sh` compila la solución, ejecuta los 6 ejemplos contra el RabbitMQ local y comprueba su salida:
+
+```bash
+docker compose up -d --wait
+```
+
+```bash
+bash scripts/smoke-test.sh
+```
+
+En Windows se ejecuta con Git Bash. El workflow [`ci.yml`](.github/workflows/ci.yml) hace lo mismo en cada push y PR: levanta RabbitMQ con el mismo `docker-compose.yml`, verifica el formato (`dotnet format`), compila con las advertencias tratadas como errores, busca dependencias con vulnerabilidades conocidas y corre la prueba de humo. Dependabot propone cada semana las actualizaciones de los paquetes NuGet, de la imagen de RabbitMQ y de las actions.
+
+## Licencia
+
+[MIT](LICENSE)

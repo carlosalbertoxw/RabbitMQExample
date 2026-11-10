@@ -1,19 +1,29 @@
 services:
   rabbitmq:
-    image: rabbitmq:latest
+    # La variante "-management" ya trae activada la interfaz web de administración.
+    # Se fija la versión menor para que una versión mayor nueva no rompa los ejemplos sin aviso.
+    image: rabbitmq:4.4-management
     container_name: rabbitmq-example
+    # RabbitMQ guarda sus datos según el nombre del nodo (rabbit@<hostname>).
+    # Con un hostname fijo, el volumen se reutiliza aunque el contenedor se vuelva a crear.
+    hostname: rabbitmq
     ports:
-      - "5672:5672"   # AMQP: aquí se conectan Producer y Consumer
-      - "15672:15672" # Interfaz web de administración (http://localhost:15672)
+      # Solo en localhost: los ejemplos corren en esta misma máquina y así nadie
+      # más en la red puede entrar con las credenciales por defecto.
+      - "127.0.0.1:5672:5672"   # AMQP: aquí se conectan los Producer y Consumer
+      - "127.0.0.1:15672:15672" # Interfaz web de administración (http://localhost:15672)
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      # Se pueden cambiar con variables de entorno o con un archivo .env junto a este compose.
+      # Solo se aplican la primera vez que arranca con el volumen vacío.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     volumes:
-      # La imagen rabbitmq:latest no trae la UI de administración activada;
-      # este archivo habilita el plugin rabbitmq_management al arrancar.
-      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+volumes:
+  rabbitmq-data:
